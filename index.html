@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>肥鱼贷</title>
+<style>
+:root{
+  --blue:#1677ff; --blue-d:#0b5fd6;
+  --gray:#86909c; --gray-l:#c9cdd4;
+  --bg:#f5f7fa; --green:#00b578;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:#e9edf2;color:#1d2129;overflow:hidden;
+  overscroll-behavior:none;
+  user-select:none;-webkit-user-select:none;
+}
+.app{
+  position:relative;display:flex;flex-direction:column;
+  height:100vh;height:100dvh;max-width:520px;margin:0 auto;
+  background:#fff;overflow:hidden;
+}
+@media (min-width:560px){ .app{box-shadow:0 0 40px rgba(0,0,0,.12);} }
+
+.nav{
+  flex:none;display:grid;grid-template-columns:44px 1fr 44px;align-items:center;
+  padding: calc(env(safe-area-inset-top) + 8px) 4px 8px;background:#fff;
+}
+.nav h1{font-size:17px;font-weight:600;text-align:center;letter-spacing:.3px}
+.nav-back{
+  width:44px;height:44px;border:none;background:transparent;
+  font-size:26px;line-height:1;color:#1d2129;cursor:pointer;
+  display:grid;place-items:center;font-family:inherit;transition:opacity .2s;
+}
+.nav-back:active{opacity:.4}
+.nav-pad{width:44px}
+
+.stepper{
+  flex:none;display:flex;align-items:center;justify-content:center;
+  padding:4px 0 16px;background:#fff;
+}
+.step{
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  font-size:11px;color:var(--gray-l);transition:color .3s;min-width:52px;
+}
+.step i{
+  width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+  font-style:normal;font-size:12px;font-weight:600;
+  background:#f2f3f5;color:#c9cdd4;transition:all .3s;
+}
+.step.is-active{color:var(--blue);font-weight:600}
+.step.is-active i{background:var(--blue);color:#fff;box-shadow:0 0 0 4px rgba(22,119,255,.12)}
+.step.is-done{color:var(--blue)}
+.step.is-done i{background:rgba(22,119,255,.12);color:var(--blue)}
+.step-line{width:34px;height:1.5px;background:#eef0f3;margin:0 2px 18px;border-radius:2px}
+
+.main{
+  flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:12px 20px 20px;background:#fff;
+}
+.page{display:none}
+.page.is-active{display:block;animation:fadeUp .35s cubic-bezier(.2,.8,.3,1)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+.page-head{text-align:center;padding-top:6px}
+.page-head h2{font-size:19px;font-weight:600;letter-spacing:.2px}
+.page-head p{font-size:13px;line-height:1.65;color:var(--gray);margin-top:8px;padding:0 6px}
+.page-head p b{color:var(--blue);font-weight:600}
+
+.scanner{
+  position:relative;width:min(66vw,248px);aspect-ratio:1/1;
+  margin:22px auto 0;border-radius:50%;display:grid;place-items:center;
+  background:radial-gradient(circle at 50% 42%, #f7faff 0%, #edf4ff 55%, #e4efff 100%);
+  overflow:hidden;touch-action:none;
+}
+.ring-dashed{
+  position:absolute;inset:9px;border-radius:50%;z-index:3;
+  border:1px dashed rgba(22,119,255,.38);
+  animation:spin 14s linear infinite;pointer-events:none;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ring-solid{
+  position:absolute;inset:0;border-radius:50%;z-index:4;
+  border:2px solid rgba(22,119,255,.22);
+  transition:transform .07s linear,border-color .07s linear,box-shadow .07s linear;
+  will-change:transform;pointer-events:none;
+}
+.face-icon{
+  position:relative;z-index:2;font-size:clamp(46px,15vw,58px);line-height:1;
+  transition:transform .1s linear;filter:drop-shadow(0 4px 12px rgba(22,119,255,.18));
+}
+.sound-bars{
+  position:absolute;bottom:30px;left:50%;transform:translateX(-50%);
+  display:flex;align-items:flex-end;gap:5px;height:26px;
+  opacity:0;transition:opacity .25s;z-index:5;
+}
+.sound-bars i{display:block;width:4px;height:4px;border-radius:2px;background:var(--blue);transition:height .06s linear}
+
+.cam-video{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;z-index:1;
+  transform:scaleX(-1);
+  display:none;background:#0b1420;
+  filter:saturate(.75) contrast(1.06) brightness(.96);
+}
+.cam-tint{
+  position:absolute;inset:0;z-index:2;display:none;pointer-events:none;
+  background:radial-gradient(circle at 50% 45%, rgba(22,119,255,.05) 0%, rgba(22,119,255,.26) 100%);
+}
+.scanner.on .cam-video{display:block}
+.scanner.on .cam-tint{display:block}
+.scanner.on .claw-paw{display:none}
+
+.ripple{
+  position:absolute;left:50%;top:50%;width:60px;height:60px;z-index:6;
+  border-radius:50%;border:2px solid rgba(255,255,255,.95);
+  box-shadow:0 0 22px rgba(22,119,255,.85);
+  transform:translate(-50%,-50%) scale(.3);
+  animation:rippleOut .65s cubic-bezier(.15,.7,.3,1) forwards;
+  pointer-events:none;
+}
+@keyframes rippleOut{
+  0%{transform:translate(-50%,-50%) scale(.3);opacity:.95}
+  100%{transform:translate(-50%,-50%) scale(3.6);opacity:0;border-width:1px}
+}
+
+.meter{
+  width:min(66vw,248px);height:6px;border-radius:99px;
+  background:#eef0f3;overflow:hidden;margin:24px auto 0;
+}
+.meter-fill{
+  height:100%;width:0%;border-radius:99px;
+  background:linear-gradient(90deg,#1677ff,#4facff);
+  transition:width .1s linear;
+}
+.motion-track{
+  width:min(66vw,248px);height:4px;border-radius:99px;
+  background:#eef0f3;overflow:hidden;margin:20px auto 0;
+}
+.motion-fill{
+  height:100%;width:0%;border-radius:99px;
+  background:linear-gradient(90deg,#4facff,#1677ff);
+  transition:width .07s linear;
+}
+.claw-dots{display:flex;justify-content:center;gap:10px;margin:18px auto 0}
+.claw-dots i{
+  display:block;width:34px;height:6px;border-radius:3px;
+  background:#eef0f3;transition:background .25s,transform .25s;
+}
+.claw-dots i.on{background:var(--blue);transform:scaleY(1.25)}
+
+.hint{
+  text-align:center;font-size:13.5px;color:var(--gray);
+  margin-top:16px;min-height:20px;line-height:1.5;transition:color .25s;
+}
+.hint.ok{color:var(--blue);font-weight:600}
+
+.success-head{text-align:center;padding-top:14px}
+.check-circle{
+  width:68px;height:68px;border-radius:50%;margin:0 auto 18px;
+  display:grid;place-items:center;
+  background:linear-gradient(135deg,#1677ff,#4facff);
+  box-shadow:0 8px 28px rgba(22,119,255,.32);
+  animation:pop .5s cubic-bezier(.2,1.5,.4,1);
+}
+@keyframes pop{from{transform:scale(.3);opacity:0}to{transform:scale(1);opacity:1}}
+.check-circle svg{width:38px;height:38px}
+.check-circle svg path{
+  fill:none;stroke:#fff;stroke-width:4.5;
+  stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:64;stroke-dashoffset:64;
+  animation:draw .45s .2s ease-out forwards;
+}
+@keyframes draw{to{stroke-dashoffset:0}}
+.success-head h2{font-size:19px;font-weight:600}
+.success-head .sub{font-size:13px;color:var(--gray);margin-top:8px}
+.amount{
+  margin-top:14px;font-size:40px;font-weight:700;color:var(--blue);
+  letter-spacing:-.5px;font-variant-numeric:tabular-nums;
+  animation:fadeUp .5s .15s both;
+}
+.amount span{font-size:20px;font-weight:600}
+
+.card{
+  background:var(--bg);border-radius:14px;padding:4px 16px;margin:22px 0 16px;
+  animation:fadeUp .5s .25s both;
+}
+.card .row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:13px 0;border-bottom:1px solid rgba(0,0,0,.045);font-size:13.5px;
+}
+.card .row:last-child{border-bottom:none}
+.card .row span{color:var(--gray)}
+.card .row b{font-weight:600;color:#1d2129}
+
+.notice{
+  font-size:12px;line-height:1.75;color:#8a6d3b;
+  background:#fffaf0;border:1px solid #ffe4b8;
+  border-radius:12px;padding:12px 14px;animation:fadeUp .5s .35s both;
+}
+.notice b{color:#d46b08}
+
+.footer{
+  flex:none;padding:12px 20px calc(12px + env(safe-area-inset-bottom));
+  background:#fff;border-top:1px solid #f5f6f8;
+}
+.btn{
+  width:100%;height:50px;border:none;border-radius:10px;
+  background:var(--blue);color:#fff;font-size:17px;font-weight:500;
+  font-family:inherit;letter-spacing:.3px;cursor:pointer;
+  transition:transform .12s,opacity .2s,background .2s;
+}
+.btn:active:not(:disabled){transform:scale(.982);background:var(--blue-d)}
+.btn:disabled{opacity:.35;cursor:default}
+.footer-tip{font-size:11px;color:#b6bcc6;text-align:center;margin-top:10px;line-height:1.5}
+
+.confetti{position:absolute;top:-24px;border-radius:2px;pointer-events:none;z-index:99;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(900px) rotate(720deg);opacity:0}}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <header class="nav">
+    <button class="nav-back" id="navBack" aria-label="返回">‹</button>
+    <h1>肥鱼贷</h1>
+    <div class="nav-pad"></div>
+  </header>
+
+  <div class="stepper">
+    <div class="step is-active" data-step="1"><i>1</i><span>哈气</span></div>
+    <div class="step-line"></div>
+    <div class="step" data-step="2"><i>2</i><span>爪击</span></div>
+    <div class="step-line"></div>
+    <div class="step" data-step="3"><i>3</i><span>放款</span></div>
+  </div>
+
+  <main class="main" id="main">
+
+    <!-- ============ 第一步 ============ -->
+    <section class="page is-active" data-page="1">
+      <div class="page-head">
+        <h2>请完成哈气动作</h2>
+        <p>请将手机靠近面部，对着麦克风<b>持续哈气</b>，以采集气流特征</p>
+      </div>
+
+      <div class="scanner" id="scanner1">
+        <div class="ring-dashed"></div>
+        <div class="ring-solid" id="ringSolid"></div>
+        <div class="face-icon" id="faceIcon">😾</div>
+        <div class="sound-bars" id="soundBars">
+          <i></i><i></i><i></i><i></i><i></i>
+        </div>
+      </div>
+
+      <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
+      <div class="hint" id="hint1">点击下方按钮开始验证</div>
+    </section>
+
+    <!-- ============ 第二步 ============ -->
+    <section class="page" data-page="2">
+      <div class="page-head">
+        <h2>请完成爪击动作</h2>
+        <p>请将手放在前置摄像头前<b>快速挥动</b>，如同猫爪出击，完成 3 次有效爪击</p>
+      </div>
+
+      <div class="scanner" id="scanner2">
+        <video id="camVideo" class="cam-video" playsinline webkit-playsinline muted autoplay></video>
+        <div class="cam-tint"></div>
+        <div class="face-icon claw-paw">🐾</div>
+        <div class="ring-dashed"></div>
+        <div class="ring-solid" id="ringCam" style="border-color:rgba(22,119,255,.35)"></div>
+      </div>
+
+      <div class="motion-track"><div class="motion-fill" id="motionFill"></div></div>
+      <div class="claw-dots" id="clawDots"><i></i><i></i><i></i></div>
+      <div class="hint" id="hint2">正在启动前置摄像头…</div>
+    </section>
+
+    <!-- ============ 第三步 ============ -->
+    <section class="page" data-page="3">
+      <div class="success-head">
+        <div class="check-circle">
+          <svg viewBox="0 0 52 52"><path d="M14 27 L23 36 L39 17"/></svg>
+        </div>
+        <h2>验证通过</h2>
+        <p class="sub">恭喜您完成贷款</p>
+        <div class="amount">¥200,000<span>.00</span></div>
+      </div>
+
+      <div class="card">
+        <div class="row"><span>借款主体</span><b>尊贵的猫主子</b></div>
+        <div class="row"><span>放款金额</span><b>¥200,000.00</b></div>
+        <div class="row"><span>年化利率</span><b>3 根猫条 / 天</b></div>
+        <div class="row"><span>还款方式</span><b>每天踩奶一次</b></div>
+        <div class="row"><span>合同编号</span><b id="contractNo">MEOW-00000000</b></div>
+      </div>
+
+      <div class="notice">
+        ⚠️ <b>本页面纯属恶搞演示</b>：摄像头画面只在本机做逐帧运动检测，
+        不录制、不上传、不保存任何影像，<b>不会真的放贷</b>，请放心。
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <button class="btn" id="btnMain">开始哈气验证</button>
+    <p class="footer-tip">验证过程不会采集或上传任何真实生物信息</p>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+'use strict';
+
+const $  = s => document.querySelector(s);
+const $$ = s => Array.prototype.slice.call(document.querySelectorAll(s));
+const clamp = (v,a,b) => Math.min(b, Math.max(a,v));
+
+/* ============================================================
+   ★★★ 语音配置 ★★★
+   跨域 mp3 直接写完整 URL，不需要 CORS 头，不要加 crossOrigin
+   ============================================================ */
+const VOICE = {
+  1: 'https://your-cdn.example.com/voice1.mp3',   // 请完成哈气动作
+  2: 'https://your-cdn.example.com/voice2.mp3',   // 请完成爪击动作
+  3: 'https://your-cdn.example.com/voice3.mp3'    // 恭喜您完成贷款20万元
+};
+
+/* 加载超时（ms），超时后标记失败走 TTS */
+const VOICE_TIMEOUT = 8000;
+
+/* mp3 失败时是否用系统 TTS 兜底 */
+const TTS_FALLBACK = true;
+const TTS_TEXT = {
+  1: '请完成哈气动作',
+  2: '请完成爪击动作',
+  3: '恭喜您完成贷款二十万元'
+};
+
+/* ============================================================
+   ★★★ 爪击识别参数 ★★★
+   ============================================================ */
+const MOTION_TH    = 12;
+const HIT_COOLDOWN = 420;
+const REARM_QUIET  = 380;
+const SAMPLE_MS    = 70;
+const CW = 64, CH = 48;
+
+/* ============================================================
+   语音引擎（跨域 mp3 + 超时 + 错误诊断 + TTS 兜底）
+   ============================================================ */
+const voiceEls = {};
+let currentVoice = null;
+
+function preloadVoices(){
+  Object.keys(VOICE).forEach(function(k){
+    const url = VOICE[k];
+    const a = new Audio();
+
+    /* 关键：不设置 crossOrigin，纯播放不需要 */
+    a.preload = 'auto';
+    a.src = url;
+
+    /* 加载成功 */
+    a.addEventListener('canplay', function(){
+      clearTimeout(a._timer);
+      a.dataset.ready = '1';
+    });
+
+    /* 加载失败 */
+    a.addEventListener('error', function(){
+      clearTimeout(a._timer);
+      a.dataset.failed = '1';
+      const code = a.error ? a.error.code : '?';
+      const msg = {
+        1: '加载被中止',
+        2: '网络错误（404 / 跨域被拦 / 防盗链）',
+        3: '解码错误（文件损坏）',
+        4: '格式不支持'
+      }[code] || '未知错误';
+      console.warn('[voice] 第 ' + k + ' 句加载失败 → ' + msg + '\n  URL: ' + url);
+    });
+
+    /* 超时保护：8 秒还没 canplay 就当失败 */
+    a._timer = setTimeout(function(){
+      if (!a.dataset.ready && !a.dataset.failed){
+        a.dataset.failed = '1';
+        console.warn('[voice] 第 ' + k + ' 句加载超时 → ' + url);
+      }
+    }, VOICE_TIMEOUT);
+
+    voiceEls[k] = a;
+  });
+}
+preloadVoices();
+
+/* 诊断：控制台里执行 __voiceDebug() 查看三句状态 */
+window.__voiceDebug = function(){
+  const list = Object.keys(voiceEls).map(function(k){
+    const a = voiceEls[k];
+    let s = '加载中';
+    if (a.dataset.failed) s = '失败';
+    else if (a.dataset.ready) s = '就绪';
+    return k + ': ' + s + '  ' + VOICE[k];
+  });
+  console.log(list.join('\n'));
+};
+
+function stopVoice(){
+  if (currentVoice){
+    try{ currentVoice.pause(); currentVoice.currentTime = 0; }catch(e){}
+    currentVoice = null;
+  }
+}
+
+function playVoice(n){
+  stopVoice();
+  const a = voiceEls[n];
+
+  /* 已标记失败 → 直接 TTS */
+  if (!a || a.dataset.failed){
+    if (TTS_FALLBACK) speakTTS(n);
+    return;
+  }
+
+  try { a.currentTime = 0; } catch(e){}
+  currentVoice = a;
+
+  const p = a.play();
+  if (p && typeof p.catch === 'function'){
+    p.catch(function(err){
+      const name = (err && err.name) || '';
+
+      /* 用户手势未解锁：不标记失败，下次还能试 */
+      if (name === 'NotAllowedError'){
+        console.warn('[voice] 第 ' + n + ' 句被浏览器拦截，需用户手势触发');
+        if (TTS_FALLBACK) speakTTS(n);
+        return;
+      }
+
+      /* 其他错误（跨域被拦 / 混合内容 / 格式不对）→ 永久失败 */
+      a.dataset.failed = '1';
+      console.warn('[voice] 第 ' + n + ' 句播放失败 [' + name + ']，改用 TTS 兜底');
+      if (TTS_FALLBACK) speakTTS(n);
+    });
+  }
+}
+
+/* ============================================================
+   TTS 兜底
+   ============================================================ */
+let voices = [];
+function refreshVoices(){
+  if (!('speechSynthesis' in window)) return;
+  try { voices = speechSynthesis.getVoices() || []; } catch(e){ voices = []; }
+}
+if ('speechSynthesis' in window){
+  refreshVoices();
+  speechSynthesis.onvoiceschanged = refreshVoices;
+  setTimeout(refreshVoices, 300);
+}
+
+function speakTTS(n){
+  if (!('speechSynthesis' in window)) return;
+  try{
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(TTS_TEXT[n] || '');
+    u.lang = 'zh-CN'; u.rate = 1; u.pitch = 1; u.volume = 1;
+    const zh = voices.filter(v => /^zh/i.test(v.lang));
+    const v  = zh.find(v => /Ting|Mei|Xiaoxiao|Yunxi|CN|Chinese|中文|普通话/i.test(v.name)) || zh[0];
+    if (v) u.voice = v;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* ============================================================
+   音效
+   ============================================================ */
+let audioCtx = null;
+function ensureCtx(){
+  if (!audioCtx){
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC){ try{ audioCtx = new AC(); }catch(e){ audioCtx = null; } }
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function playWhoosh(){
+  const ctx = ensureCtx(); if (!ctx) return;
+  const dur = 0.25, len = Math.floor(ctx.sampleRate * dur);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i=0;i<len;i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, 2.2);
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  const flt = ctx.createBiquadFilter();
+  flt.type='bandpass';
+  flt.frequency.setValueAtTime(2800, ctx.currentTime);
+  flt.frequency.exponentialRampToValueAtTime(700, ctx.currentTime+dur);
+  flt.Q.value = 1.5;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.22, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+dur);
+  src.connect(flt); flt.connect(g); g.connect(ctx.destination);
+  src.start();
+}
+function playDing(){
+  const ctx = ensureCtx(); if (!ctx) return;
+  [880, 1174.66].forEach(function(f,i){
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type='sine'; o.frequency.value=f;
+    const t0 = ctx.currentTime + i*0.11;
+    g.gain.setValueAtTime(0,t0);
+    g.gain.linearRampToValueAtTime(0.14, t0+0.015);
+    g.gain.exponentialRampToValueAtTime(0.001, t0+0.5);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t0); o.stop(t0+0.55);
+  });
+}
+function playCash(){
+  const ctx = ensureCtx(); if (!ctx) return;
+  [523.25, 659.25, 783.99, 1046.5].forEach(function(f,i){
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type='sine'; o.frequency.value=f;
+    const t0 = ctx.currentTime + i*0.09;
+    g.gain.setValueAtTime(0,t0);
+    g.gain.linearRampToValueAtTime(0.15, t0+0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, t0+0.55);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t0); o.stop(t0+0.6);
+  });
+}
+
+/* ============================================================
+   DOM
+   ============================================================ */
+const app        = $('#app');
+const main       = $('#main');
+const btnMain    = $('#btnMain');
+const navBack    = $('#navBack');
+
+const ringSolid  = $('#ringSolid');
+const faceIcon   = $('#faceIcon');
+const soundBars  = $('#soundBars');
+const bars       = soundBars ? Array.prototype.slice.call(soundBars.children) : [];
+const meterFill  = $('#meterFill');
+const hint1      = $('#hint1');
+
+const scanner2     = $('#scanner2');
+const camVideo     = $('#camVideo');
+const ringCam      = $('#ringCam');
+const motionFill   = $('#motionFill');
+const clawDots     = $('#clawDots');
+const hint2        = $('#hint2');
+const contractNo   = $('#contractNo');
+
+let step = 1;
+
+/* ============================================================
+   步骤切换
+   ============================================================ */
+function goStep(n){
+  step = n;
+  $$('.page').forEach(p => p.classList.toggle('is-active', +p.dataset.page === n));
+  $$('.step').forEach(el => {
+    const i = +el.dataset.step;
+    el.classList.toggle('is-active', i === n);
+    el.classList.toggle('is-done',   i <  n);
+  });
+  main.scrollTop = 0;
+  updateFooter();
+
+  if (n === 2){ playVoice(2); startClaw(); }
+  if (n === 3) playVoice(3);
+}
+
+function updateFooter(){
+  if (step === 1){ btnMain.textContent = '开始哈气验证'; btnMain.disabled = false; }
+  else if (step === 2){ btnMain.textContent = '请在前置摄像头前挥动手掌'; btnMain.disabled = true; }
+  else { btnMain.textContent = '完成'; btnMain.disabled = false; }
+}
+
+/* ============================================================
+   第一步：哈气
+   ============================================================ */
+let micStream = null, analyser = null, timeBuf = null;
+let blowRaf = 0, blowing = false, blowProgress = 0, lastT = 0, simTimer = null;
+
+function setHint1(t, ok){ hint1.textContent = t; hint1.classList.toggle('ok', !!ok); }
+
+function renderBlow(level){
+  if (ringSolid){
+    ringSolid.style.transform = 'scale(' + (1 + level*0.13) + ')';
+    ringSolid.style.borderColor = 'rgba(22,119,255,' + (0.22 + level*0.65) + ')';
+    ringSolid.style.boxShadow = '0 0 ' + (level*26) + 'px rgba(22,119,255,' + (level*0.45) + ')';
+  }
+  if (faceIcon) faceIcon.style.transform = 'scale(' + (1 + level*0.09) + ')';
+  if (soundBars){
+    soundBars.style.opacity = level > 0.08 ? '1' : '0';
+    const t = Date.now()/110;
+    bars.forEach(function(b,i){
+      const h = 4 + level * (16 + Math.abs(Math.sin(t + i*1.1))*10);
+      b.style.height = Math.max(4, h).toFixed(1) + 'px';
+    });
+  }
+}
+
+function stopMic(){
+  if (micStream){
+    try { micStream.getTracks().forEach(tr => tr.stop()); } catch(e){}
+    micStream = null;
+  }
+  analyser = null;
+}
+
+async function beginBlow(){
+  btnMain.disabled = true;
+  setHint1('正在请求麦克风权限…');
+  ensureCtx();
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    setHint1('当前环境不支持麦克风，已切换为演示模式');
+    simulateBlow(); return;
+  }
+  try{
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio:{ echoCancellation:true, noiseSuppression:false, autoGainControl:false }
+    });
+  }catch(err){
+    setHint1('无法访问麦克风，已切换为演示模式');
+    simulateBlow(); return;
+  }
+
+  const ctx = ensureCtx();
+  if (!ctx){ simulateBlow(); return; }
+  try{
+    const src = ctx.createMediaStreamSource(micStream);
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.72;
+    src.connect(analyser);
+    timeBuf = new Uint8Array(analyser.fftSize);
+  }catch(e){
+    stopMic();
+    setHint1('麦克风初始化失败，已切换为演示模式');
+    simulateBlow(); return;
+  }
+
+  setHint1('请对着麦克风持续哈气…');
+  blowing = true;
+  lastT = performance.now();
+  blowRaf = requestAnimationFrame(blowLoop);
+}
+
+function blowLoop(t){
+  if (!blowing || !analyser) return;
+  const dt = Math.min(t - lastT, 110);
+  lastT = t;
+
+  analyser.getByteTimeDomainData(timeBuf);
+  let sum = 0;
+  for (let i=0;i<timeBuf.length;i++){
+    const v = (timeBuf[i]-128)/128;
+    sum += v*v;
+  }
+  const rms = Math.sqrt(sum/timeBuf.length);
+  const level = clamp((rms - 0.012)/0.15, 0, 1);
+  renderBlow(level);
+
+  if (level > 0.32) blowProgress = Math.min(1, blowProgress + dt/3000);
+  else              blowProgress = Math.max(0, blowProgress - dt/6400);
+  meterFill.style.width = (blowProgress*100).toFixed(1) + '%';
+
+  if (blowProgress >= 1){ blowing = false; stopMic(); onBlowDone(); return; }
+  blowRaf = requestAnimationFrame(blowLoop);
+}
+
+function simulateBlow(){
+  if (simTimer) clearInterval(simTimer);
+  let p = 0;
+  simTimer = setInterval(function(){
+    p += 2.5 + Math.random()*3.5;
+    blowProgress = Math.min(1, p/100);
+    meterFill.style.width = (blowProgress*100).toFixed(1) + '%';
+    renderBlow(0.45 + Math.random()*0.55);
+    if (blowProgress >= 1){
+      clearInterval(simTimer); simTimer = null;
+      onBlowDone();
+    }
+  }, 80);
+}
+
+function onBlowDone(){
+  meterFill.style.width = '100%';
+  setHint1('哈气验证通过', true);
+  renderBlow(0);
+  if (ringSolid){
+    ringSolid.style.transform = 'scale(1)';
+    ringSolid.style.borderColor = 'rgba(22,119,255,.85)';
+    ringSolid.style.boxShadow = '0 0 24px rgba(22,119,255,.35)';
+  }
+  playDing();
+  setTimeout(function(){ goStep(2); }, 700);
+}
+
+/* ============================================================
+   第二步：前置摄像头爪击识别
+   ============================================================ */
+let clawHits = 0;
+let clawMode = 'camera';
+let camStream = null;
+let camTimer = null;
+let camCanvas = null, camCtx = null;
+let prevGray = null;
+let armed = true, lastHitTime = 0, lastMotionTime = 0;
+
+function setHint2(t, ok){ hint2.textContent = t; hint2.classList.toggle('ok', !!ok); }
+
+function resetClaw(){
+  clawHits = 0;
+  armed = true;
+  lastHitTime = 0;
+  lastMotionTime = 0;
+  Array.prototype.forEach.call(clawDots.children, d => d.classList.remove('on'));
+  setHint2('正在启动前置摄像头…');
+  motionFill.style.width = '0%';
+}
+
+function updateDots(){
+  Array.prototype.forEach.call(clawDots.children, function(d,i){
+    d.classList.toggle('on', i < clawHits);
+  });
+}
+
+async function startClaw(){
+  if (camStream) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    fallbackTouch('摄像头不可用'); return;
+  }
+
+  setHint2('正在启动前置摄像头…');
+  try{
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'user' }, width: { ideal: 320 }, height: { ideal: 240 } },
+      audio: false
+    });
+  }catch(e){
+    fallbackTouch('摄像头未授权'); return;
+  }
+
+  camVideo.srcObject = camStream;
+  try { await camVideo.play(); } catch(e){}
+
+  scanner2.classList.add('on');
+  clawMode = 'camera';
+  setHint2('请将手在镜头前快速挥动');
+
+  if (!camCanvas){
+    camCanvas = document.createElement('canvas');
+    camCanvas.width  = CW;
+    camCanvas.height = CH;
+    camCtx = camCanvas.getContext('2d', { willReadFrequently: true });
+  }
+  prevGray = null;
+  armed = true;
+  if (camTimer) clearInterval(camTimer);
+  camTimer = setInterval(camTick, SAMPLE_MS);
+}
+
+function fallbackTouch(reason){
+  clawMode = 'touch';
+  scanner2.classList.add('fallback');
+  setHint2(reason + '，请在圆框内快速划动');
+}
+
+function camTick(){
+  if (!camVideo || camVideo.readyState < 2 || !camCtx) return;
+
+  camCtx.drawImage(camVideo, 0, 0, CW, CH);
+  const img = camCtx.getImageData(0, 0, CW, CH).data;
+  const n = CW * CH;
+  const gray = new Uint8Array(n);
+
+  for (let i = 0, j = 0; i < n; i++, j += 4){
+    gray[i] = (img[j]*0.299 + img[j+1]*0.587 + img[j+2]*0.114) | 0;
+  }
+
+  if (!prevGray){ prevGray = gray; return; }
+
+  let signed = 0;
+  for (let i = 0; i < n; i++) signed += gray[i] - prevGray[i];
+  const meanShift = signed / n;
+
+  let absSum = 0;
+  for (let i = 0; i < n; i++){
+    absSum += Math.abs((gray[i] - prevGray[i]) - meanShift);
+  }
+  const motion = absSum / n;
+  prevGray = gray;
+
+  const level = clamp(motion / 40, 0, 1);
+  motionFill.style.width = (level * 100).toFixed(0) + '%';
+  ringCam.style.transform = 'scale(' + (1 + level*0.07) + ')';
+  ringCam.style.borderColor = 'rgba(22,119,255,' + (0.32 + level*0.62) + ')';
+  ringCam.style.boxShadow = '0 0 ' + (8 + level*32) + 'px rgba(22,119,255,' + (0.18 + level*0.5) + ')';
+
+  const now = performance.now();
+  if (motion > MOTION_TH){
+    lastMotionTime = now;
+    if (armed && now - lastHitTime > HIT_COOLDOWN){
+      armed = false;
+      lastHitTime = now;
+      onClawHit();
+    }
+  } else {
+    if (!armed && now - lastMotionTime > REARM_QUIET) armed = true;
+  }
+}
+
+function onClawHit(){
+  clawHits++;
+  updateDots();
+  playWhoosh();
+  spawnRipple();
+  if (navigator.vibrate){ try{ navigator.vibrate(25); }catch(e){} }
+
+  if (clawHits >= 3){
+    onClawDone();
+  } else {
+    setHint2('漂亮！还需 ' + (3 - clawHits) + ' 次');
+    hint2.classList.remove('ok');
+  }
+}
+
+function spawnRipple(){
+  const r = document.createElement('div');
+  r.className = 'ripple';
+  scanner2.appendChild(r);
+  setTimeout(function(){ if (r.parentNode) r.parentNode.removeChild(r); }, 700);
+}
+
+/* ---- 触屏兜底 ---- */
+let isDown = false, rect = null, lastPt = null;
+let travel = 0, maxSpeed = 0;
+
+scanner2.addEventListener('pointerdown', function(e){
+  if (step !== 2 || clawMode !== 'touch') return;
+  isDown = true;
+  rect = scanner2.getBoundingClientRect();
+  lastPt = { x:e.clientX, y:e.clientY, t:performance.now() };
+  travel = 0; maxSpeed = 0;
+  try { scanner2.setPointerCapture(e.pointerId); } catch(err){}
+  e.preventDefault();
+}, { passive:false });
+
+scanner2.addEventListener('pointermove', function(e){
+  if (!isDown) return;
+  const now = performance.now();
+  const dt = Math.max(now - lastPt.t, 1);
+  const dx = e.clientX - lastPt.x, dy = e.clientY - lastPt.y;
+  const d = Math.sqrt(dx*dx + dy*dy);
+  travel += d;
+  if (d > 2) maxSpeed = Math.max(maxSpeed, d/dt);
+  lastPt = { x:e.clientX, y:e.clientY, t:now };
+  e.preventDefault();
+}, { passive:false });
+
+function endTouch(e){
+  if (!isDown) return;
+  isDown = false;
+  if (step !== 2 || clawMode !== 'touch') return;
+  if (travel > 45 && maxSpeed > 0.55){
+    onClawHit();
+  } else if (travel > 14){
+    setHint2('速度不够，请再快一点');
+    hint2.classList.remove('ok');
+  }
+}
+scanner2.addEventListener('pointerup', endTouch);
+scanner2.addEventListener('pointercancel', function(){ isDown = false; });
+
+function stopClaw(){
+  if (camTimer){ clearInterval(camTimer); camTimer = null; }
+  if (camStream){
+    try { camStream.getTracks().forEach(t => t.stop()); } catch(e){}
+    camStream = null;
+  }
+  if (camVideo) { try { camVideo.srcObject = null; } catch(e){} }
+  scanner2.classList.remove('on');
+  prevGray = null;
+  motionFill.style.width = '0%';
+}
+
+function onClawDone(){
+  setHint2('爪击验证通过', true);
+  playDing();
+  setTimeout(function(){
+    stopClaw();
+    goStep(3);
+    onSuccess();
+  }, 780);
+}
+
+/* ============================================================
+   第三步：完成
+   ============================================================ */
+function onSuccess(){
+  contractNo.textContent = 'MEOW-' + String(Date.now()).slice(-8);
+  playCash();
+  confetti();
+}
+
+function confetti(){
+  const colors = ['#1677ff','#4facff','#00b578','#ffb020','#ff6b81','#a78bfa'];
+  for (let i=0;i<40;i++){
+    const d = document.createElement('div');
+    d.className = 'confetti';
+    d.style.left = (Math.random()*100) + '%';
+    d.style.background = colors[Math.floor(Math.random()*colors.length)];
+    d.style.width = (5 + Math.random()*5) + 'px';
+    d.style.height = (9 + Math.random()*8) + 'px';
+    d.style.animationDelay = (Math.random()*0.6) + 's';
+    d.style.animationDuration = (1.6 + Math.random()*1.4) + 's';
+    app.appendChild(d);
+    (function(node){
+      setTimeout(function(){ if (node.parentNode) node.parentNode.removeChild(node); }, 3600);
+    })(d);
+  }
+}
+
+/* ============================================================
+   按钮 / 重置 / 生命周期
+   ============================================================ */
+btnMain.addEventListener('click', function(){
+  ensureCtx();
+  if (step === 1){
+    playVoice(1);
+    beginBlow();
+  } else if (step === 3){
+    resetAll();
+  }
+});
+
+navBack.addEventListener('click', function(){
+  if (step === 3) resetAll();
+});
+
+function resetAll(){
+  stopVoice();
+  if ('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
+  if (simTimer){ clearInterval(simTimer); simTimer = null; }
+  if (blowRaf){ cancelAnimationFrame(blowRaf); blowRaf = 0; }
+  blowing = false;
+  stopMic();
+  stopClaw();
+  scanner2.classList.remove('fallback');
+
+  blowProgress = 0;
+  meterFill.style.width = '0%';
+  renderBlow(0);
+  if (ringSolid){
+    ringSolid.style.transform = 'scale(1)';
+    ringSolid.style.borderColor = 'rgba(22,119,255,.22)';
+    ringSolid.style.boxShadow = 'none';
+  }
+  setHint1('点击下方按钮开始验证');
+  resetClaw();
+  goStep(1);
+}
+
+document.addEventListener('visibilitychange', function(){
+  if (document.hidden){
+    stopVoice();
+    if (blowing){
+      blowing = false;
+      if (blowRaf) cancelAnimationFrame(blowRaf);
+      stopMic();
+      blowProgress = 0;
+      meterFill.style.width = '0%';
+      renderBlow(0);
+      setHint1('验证已中断，请重新开始');
+      btnMain.disabled = false;
+    }
+    if (step === 2){
+      stopClaw();
+      setHint2('验证已暂停，返回页面后继续');
+    }
+  } else {
+    if (step === 2) startClaw();
+  }
+});
+
+updateFooter();
+})();
+</script>
+</body>
+</html>
