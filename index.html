@@ -932,11 +932,10 @@ function blowLoop(t){
   /* 页内语音还在播报时不累计：外放声音可能被麦克风拾到，不能自己把自己吹过 */
   const voiceBusy = !!voiceBufferSrc || !!(currentVoice && !currentVoice.paused);
 
-  /* 启动后前 350ms 只校准底噪，不累计（防止 AGC 起振误判） */
+  /* 启动后前 350ms 只校准底噪，不累计（防止 AGC 起振误判）。
+     进度只增不减：中途停一下、被系统打断都不会回退 */
   if (t >= blowArmAt && !voiceBusy && rms > thr){
     blowProgress = Math.min(1, blowProgress + dt * (0.6 + level * 1.4) / BLOW_GAIN);
-  } else {
-    blowProgress = Math.max(0, blowProgress - dt/2500);
   }
   meterFill.style.width = (blowProgress*100).toFixed(1) + '%';
 
@@ -979,6 +978,7 @@ let camCanvas = null, camCtx = null;
 let prevGray = null;
 /* 爪击识别状态：噪声基线 + 平滑能量 + 迟滞/冷却/超时复位 */
 let armed = true, lastHitTime = -1e9;   /* -1e9：进第二步第一次挥手立刻可触发 */
+let motionPeak = 0;                      /* 运动条峰值：只增不减，不回退 */
 let clawBase = 0, clawEnv = 0, quietFrom = 0;
 let clawHi = CLAW_TH_BASE, clawLo = CLAW_TH_BASE * 0.55;
 
@@ -990,6 +990,7 @@ function resetClaw(){
   lastHitTime = -1e9;
   clawBase = 0; clawEnv = 0; quietFrom = 0;
   clawHi = CLAW_TH_BASE; clawLo = CLAW_TH_BASE * 0.55;
+  motionPeak = 0;
   Array.prototype.forEach.call(clawDots.children, d => d.classList.remove('on'));
   setHint2('正在启动前置摄像头…');
   motionFill.style.width = '0%';
@@ -1071,7 +1072,8 @@ function camTick(){
   const hit = clawStep(motion, performance.now());
 
   const level = clamp(clawEnv / (clawHi * 1.7), 0, 1);
-  motionFill.style.width = (level * 100).toFixed(0) + '%';
+  if (level > motionPeak) motionPeak = level;
+  motionFill.style.width = (motionPeak * 100).toFixed(0) + '%';
   ringCam.style.transform = 'scale(' + (1 + level*0.07) + ')';
   ringCam.style.borderColor = 'rgba(22,119,255,' + (0.32 + level*0.62) + ')';
   ringCam.style.boxShadow = '0 0 ' + (8 + level*32) + 'px rgba(22,119,255,' + (0.18 + level*0.5) + ')';
@@ -1211,7 +1213,7 @@ function stopClaw(){
   if (camVideo) { try { camVideo.srcObject = null; } catch(e){} }
   scanner2.classList.remove('on');
   prevGray = null;
-  motionFill.style.width = '0%';
+  /* 运动条不清零：重进页面时保留已积累的进度 */
 }
 
 function onClawDone(){
@@ -1325,10 +1327,10 @@ document.addEventListener('visibilitychange', function(){
       blowing = false;
       if (blowRaf) cancelAnimationFrame(blowRaf);
       stopMic();
-      blowProgress = 0;
-      meterFill.style.width = '0%';
+      /* 进度条保留，不清零 */
       renderBlow(0);
-      setHint1('验证已中断，请重新开始');
+      setHint1('验证已暂停，返回后点「继续哈气验证」（进度已保留）');
+      btnMain.textContent = '继续哈气验证';
       btnMain.disabled = false;
     }
     if (step === 2){
