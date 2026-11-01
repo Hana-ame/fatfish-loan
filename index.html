@@ -427,6 +427,7 @@ window.__voiceDebug = function(){
     else if (a.dataset.ready) s = '就绪';
     return {
       n: +k, url: VOICE[k], state: s,
+      decoded: !!voiceBuffers[k], playingBuffer: !!voiceBufferSrc,
       readyState: a.readyState, paused: a.paused,
       currentTime: +a.currentTime.toFixed(2), duration: +(a.duration || 0).toFixed(2)
     };
@@ -438,6 +439,13 @@ let voicePrimed = false;
 function primeVoices(){
   if (voicePrimed) return;
   voicePrimed = true;
+
+  /* 首选方案：把 mp3 解码成 AudioBuffer，之后用已解锁的 AudioContext 播放，
+     完全不依赖 <audio> 的自动播放策略 */
+  ensureCtx();
+  loadVoiceBuffers();
+
+  /* 备用方案：给 <audio> 元素也解锁一次，解码失败时还能出声 */
   Object.keys(voiceEls).forEach(function(k){
     const a = voiceEls[k];
     if (!a || a.dataset.failed) return;
@@ -459,7 +467,60 @@ function primeVoices(){
   });
 }
 
+/* ---- WebAudio 缓冲播放（移动端最可靠）---- */
+const voiceBuffers = {};
+let voiceBufferSrc = null;
+let voiceBuffersLoading = false;
+
+function loadVoiceBuffers(){
+  if (voiceBuffersLoading) return;
+  voiceBuffersLoading = true;
+  const ctx = ensureCtx();
+  if (!ctx) return;
+  Object.keys(VOICE).forEach(function(k){
+    fetch(VOICE[k], { cache: 'force-cache' })
+      .then(function(res){
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.arrayBuffer();
+      })
+      .then(function(arr){
+        return new Promise(function(resolve, reject){
+          ctx.decodeAudioData(arr, resolve, reject);
+        });
+      })
+      .then(function(buf){
+        voiceBuffers[k] = buf;
+        console.log('[voice] 第 ' + k + ' 句已解码为 AudioBuffer，' + buf.duration.toFixed(2) + 's');
+      })
+      .catch(function(err){
+        console.warn('[voice] 第 ' + k + ' 句解码失败，改用 <audio>：' + (err && err.message));
+      });
+  });
+}
+
+function playVoiceBuffer(n){
+  const ctx = ensureCtx();
+  const buf = voiceBuffers[n];
+  if (!ctx || !buf) return false;
+  try{
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.onended = function(){ if (voiceBufferSrc === src) voiceBufferSrc = null; };
+    src.start();
+    voiceBufferSrc = src;
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
 function stopVoice(){
+  if (voiceBufferSrc){
+    try{ voiceBufferSrc.stop(); }catch(e){}
+    try{ voiceBufferSrc.disconnect(); }catch(e){}
+    voiceBufferSrc = null;
+  }
   if (currentVoice){
     try{ currentVoice.pause(); currentVoice.currentTime = 0; }catch(e){}
     currentVoice = null;
@@ -470,6 +531,11 @@ function playVoice(n){
   stopVoice();
   /* 正式播放前把可能还在念的 TTS 掐掉，避免两路声音叠在一起 */
   if ('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
+
+  /* 1) 首选：AudioBuffer 播放（AudioContext 已解锁，手机端不会被静音） */
+  if (playVoiceBuffer(n)) return;
+
+  /* 2) 备用：<audio> 元素 */
   const a = voiceEls[n];
 
   /* 已标记失败 → 直接 TTS */
