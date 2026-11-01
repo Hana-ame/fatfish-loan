@@ -710,14 +710,15 @@ function updateFooter(){
    ============================================================ */
 let micStream = null, analyser = null, timeBuf = null;
 let blowRaf = 0, blowing = false, blowProgress = 0, lastT = 0;
+let blowFloor = 0, blowArmAt = 0;          /* 环境底噪 / 启动保护 */
+let lastRms = 0, lastThr = 0, lastLevel = 0, blowFrames = 0, firstBlowRms = -1;
 let micTimer = null, micAttempt = 0;
 const MIC_TIMEOUT = 8000;   /* 手机浏览器可能既不弹授权框也不报错，超时后引导跳过 */
 
 /* 哈气判定（宽松版）：rms≈0.02 的轻声哈气就能过，旧版要 0.06 相当于用力吹 */
-const BLOW_FLOOR = 0.006;   /* 静音基线 */
-const BLOW_RANGE = 0.045;   /* 从基线到「满级哈气」的增量 */
-const BLOW_ON    = 0.18;    /* 超过该级别开始累计进度 */
-const BLOW_GAIN  = 1600;    /* 进度条填满所需毫秒系数（越小越容易） */
+const BLOW_FLOOR_MIN = 0.0035; /* 绝对触发下限：比正常呼吸略响一点就过 */
+const BLOW_RANGE     = 0.020;  /* 从触发阈值到「满级哈气」的增量 */
+const BLOW_GAIN      = 1100;   /* 进度条填满所需毫秒系数（越小越容易） */
 
 function setHint1(t, ok){ hint1.textContent = t; hint1.classList.toggle('ok', !!ok); }
 
@@ -811,7 +812,8 @@ async function beginBlow(){
   }
   try{
     micStream = await navigator.mediaDevices.getUserMedia({
-      audio:{ echoCancellation:true, noiseSuppression:false, autoGainControl:false }
+      /* AGC 打开：轻声也被放大；保留回声消除抵掉外放提示音；降噪关闭，否则气流会被当噪声滤掉 */
+      audio:{ echoCancellation:true, noiseSuppression:false, autoGainControl:true }
     });
   }catch(err){
     if (attempt !== micAttempt) return;   /* 已跳过或已重置，忽略迟到的失败 */
@@ -839,7 +841,9 @@ async function beginBlow(){
     return;
   }
 
-  setHint1('请对着麦克风持续哈气…');
+  setHint1('对着麦克风轻轻哈气即可…');
+  blowFloor = 0;
+  blowArmAt = performance.now() + 350;
   blowing = true;
   lastT = performance.now();
   blowRaf = requestAnimationFrame(blowLoop);
@@ -857,16 +861,47 @@ function blowLoop(t){
     sum += v*v;
   }
   const rms = Math.sqrt(sum/timeBuf.length);
-  const level = clamp((rms - BLOW_FLOOR)/BLOW_RANGE, 0, 1);
-  renderBlow(level);
 
-  if (level > BLOW_ON) blowProgress = Math.min(1, blowProgress + dt * (0.6 + level) / BLOW_GAIN);
-  else                 blowProgress = Math.max(0, blowProgress - dt/4000);
+  blowFrames++;
+  if (firstBlowRms < 0) firstBlowRms = rms;
+
+  /* 底噪自适应：安静时缓慢跟随环境，出声时冻结，避免空调/风扇把阈值抬走 */
+  if (!blowFloor) blowFloor = Math.max(0.0008, rms);
+  const thr = Math.max(BLOW_FLOOR_MIN, blowFloor * 1.5 + 0.001);
+  if (rms < thr * 0.9){
+    blowFloor = Math.min(0.02, blowFloor * 0.96 + rms * 0.04);
+  }
+
+  const level = clamp((rms - thr) / BLOW_RANGE, 0, 1);
+  lastRms = rms; lastThr = thr; lastLevel = level;
+
+  /* 视觉反馈：只要有声音波形就动，避免「吹了没反应」 */
+  renderBlow(clamp(rms / 0.03, 0, 1));
+
+  /* 页内语音还在播报时不累计：外放声音可能被麦克风拾到，不能自己把自己吹过 */
+  const voiceBusy = !!voiceBufferSrc || !!(currentVoice && !currentVoice.paused);
+
+  /* 启动后前 350ms 只校准底噪，不累计（防止 AGC 起振误判） */
+  if (t >= blowArmAt && !voiceBusy && rms > thr){
+    blowProgress = Math.min(1, blowProgress + dt * (0.6 + level * 1.4) / BLOW_GAIN);
+  } else {
+    blowProgress = Math.max(0, blowProgress - dt/2500);
+  }
   meterFill.style.width = (blowProgress*100).toFixed(1) + '%';
 
   if (blowProgress >= 1){ blowing = false; stopMic(); onBlowDone(); return; }
   blowRaf = requestAnimationFrame(blowLoop);
 }
+
+/* 现场诊断：控制台执行 __blowDebug() 看当前音量 / 底噪 / 阈值 / 进度 */
+window.__blowDebug = function(){
+  return {
+    rms: +lastRms.toFixed(4), floor: +blowFloor.toFixed(4), threshold: +lastThr.toFixed(4),
+    level: +lastLevel.toFixed(2), progress: +blowProgress.toFixed(3), blowing: blowing,
+    frames: blowFrames, firstRms: +firstBlowRms.toFixed(4),
+    voiceBusy: !!(voiceBufferSrc || (currentVoice && !currentVoice.paused))
+  };
+};
 
 function onBlowDone(){
   clearMicTimer();
