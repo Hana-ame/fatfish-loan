@@ -337,12 +337,13 @@ const clamp = (v,a,b) => Math.min(b, Math.max(a,v));
 
 /* ============================================================
    ★★★ 语音配置 ★★★
-   跨域 mp3 直接写完整 URL，不需要 CORS 头，不要加 crossOrigin
+   仓库自带 voice/voice1..3.mp3（中文语音，相对路径）。
+   相对路径没有跨域 / 防盗链 / 混合内容问题；想换真人也只改这里。
    ============================================================ */
 const VOICE = {
-  1: 'https://your-cdn.example.com/voice1.mp3',   // 请完成哈气动作
-  2: 'https://your-cdn.example.com/voice2.mp3',   // 请完成爪击动作
-  3: 'https://your-cdn.example.com/voice3.mp3'    // 恭喜您完成贷款20万元
+  1: 'voice/voice1.mp3',   // 请完成哈气动作
+  2: 'voice/voice2.mp3',   // 请完成爪击动作
+  3: 'voice/voice3.mp3'    // 恭喜您完成贷款20万元
 };
 
 /* 加载超时（ms），超时后标记失败走 TTS */
@@ -419,15 +420,44 @@ preloadVoices();
 
 /* 诊断：控制台里执行 __voiceDebug() 查看三句状态 */
 window.__voiceDebug = function(){
-  const list = Object.keys(voiceEls).map(function(k){
+  return Object.keys(voiceEls).map(function(k){
     const a = voiceEls[k];
     let s = '加载中';
     if (a.dataset.failed) s = '失败';
     else if (a.dataset.ready) s = '就绪';
-    return k + ': ' + s + '  ' + VOICE[k];
+    return {
+      n: +k, url: VOICE[k], state: s,
+      readyState: a.readyState, paused: a.paused,
+      currentTime: +a.currentTime.toFixed(2), duration: +(a.duration || 0).toFixed(2)
+    };
   });
-  console.log(list.join('\n'));
 };
+
+/* 手机自动播放限制：首次手势里先静音播一下，第 2/3 步才能自动开口 */
+let voicePrimed = false;
+function primeVoices(){
+  if (voicePrimed) return;
+  voicePrimed = true;
+  Object.keys(voiceEls).forEach(function(k){
+    const a = voiceEls[k];
+    if (!a || a.dataset.failed) return;
+    try{
+      a.muted = true;
+      const p = a.play();
+      if (p && typeof p.then === 'function'){
+        p.then(function(){
+          a.muted = false;
+          setTimeout(function(){
+            if (a === currentVoice) return;   /* 正在正式播放，别把它停掉 */
+            try { a.pause(); a.currentTime = 0; } catch(e){}
+          }, 150);
+        }).catch(function(){ a.muted = false; });
+      } else {
+        a.muted = false;
+      }
+    }catch(e){ a.muted = false; }
+  });
+}
 
 function stopVoice(){
   if (currentVoice){
@@ -438,6 +468,8 @@ function stopVoice(){
 
 function playVoice(n){
   stopVoice();
+  /* 正式播放前把可能还在念的 TTS 掐掉，避免两路声音叠在一起 */
+  if ('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
   const a = voiceEls[n];
 
   /* 已标记失败 → 直接 TTS */
@@ -446,12 +478,15 @@ function playVoice(n){
     return;
   }
 
-  try { a.currentTime = 0; } catch(e){}
+  try { a.currentTime = 0; a.muted = false; } catch(e){}
   currentVoice = a;
 
   const p = a.play();
   if (p && typeof p.catch === 'function'){
-    p.catch(function(err){
+    p.then(function(){
+      /* 播放成功就不再需要 TTS 兜底 */
+      if ('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
+    }).catch(function(err){
       const name = (err && err.name) || '';
 
       /* 用户手势未解锁：不标记失败，下次还能试 */
@@ -1068,6 +1103,7 @@ function confetti(){
    按钮 / 重置 / 生命周期
    ============================================================ */
 btnMain.addEventListener('click', function(){
+  primeVoices();
   ensureCtx();
   if (step === 1){
     playVoice(1);
@@ -1083,8 +1119,13 @@ navBack.addEventListener('click', function(){
 
 btnSkip.addEventListener('click', function(){
   if (step !== 1) return;
+  primeVoices();
   skipBlow();
 });
+
+/* 任意首次触摸/点击都当作解锁语音的手势（iOS/Android 自动播放限制） */
+document.addEventListener('pointerdown', primeVoices, { once: true, capture: true });
+document.addEventListener('touchstart', primeVoices, { once: true, capture: true, passive: true });
 
 function resetAll(){
   stopVoice();

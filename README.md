@@ -38,9 +38,30 @@
 
 ## 语音
 
-`index.html` 里的 `VOICE` 目前是占位地址（`https://your-cdn.example.com/voice*.mp3`），
-加载失败会自动回落到系统 TTS，所以开箱即用。想换成真人语音，把这三行改成自己的 mp3 直链即可
-（跨域 mp3 不需要 CORS 头，也**不要**设置 `crossOrigin`）。
+三句提示音是仓库自带的中文语音，用相对路径加载，不依赖外部 CDN，也不会有跨域 / 防盗链问题：
+
+| 文件 | 内容 | 时长 |
+| --- | --- | --- |
+| `voice/voice1.mp3` | 请完成哈气动作 | 2.16s |
+| `voice/voice2.mp3` | 请完成爪击动作 | 2.14s |
+| `voice/voice3.mp3` | 恭喜您完成贷款二十万元 | 3.00s |
+
+合计约 44KB。想换自己的声音：直接覆盖这三个文件，或改 `index.html` 里 `VOICE` 的路径。
+mp3 播放失败仍会回落到系统 TTS（`TTS_FALLBACK`）。
+
+移动端自动播放限制的处理：任意首次触摸 / 点击时调用 `primeVoices()` 对三句做一次
+静音预热，这样第 2、3 步由定时器触发的语音才不会被浏览器拦下；
+第 1 步的语音本来就在按钮点击的手势里播放。
+
+重新生成（需要 `pip install edge-tts`，或换任意 TTS）：
+
+```bash
+edge-tts --voice zh-CN-XiaoxiaoNeural --text "请完成哈气动作"          --write-media voice/voice1.mp3
+edge-tts --voice zh-CN-XiaoxiaoNeural --text "请完成爪击动作"          --write-media voice/voice2.mp3
+edge-tts --voice zh-CN-XiaoxiaoNeural --text "恭喜您完成贷款二十万元"  --write-media voice/voice3.mp3
+```
+
+诊断：控制台 `__voiceDebug()` 返回三句的 `state / readyState / paused / currentTime / duration`。
 
 ## 本地预览
 
