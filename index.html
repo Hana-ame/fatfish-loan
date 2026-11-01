@@ -357,12 +357,16 @@ const TTS_TEXT = {
 };
 
 /* ============================================================
-   ★★★ 爪击识别参数 ★★★
+   ★★★ 爪击识别参数（宽松版）★★★
+   阈值随画面噪声自适应；第一次爪击后也能正常重新武装
    ============================================================ */
-const MOTION_TH    = 12;
-const HIT_COOLDOWN = 420;
-const REARM_QUIET  = 380;
-const SAMPLE_MS    = 70;
+const CLAW_TH_BASE   = 8;    /* 触发阈值下限：画面稍动就算数 */
+const CLAW_HI_DELTA  = 3;    /* 触发阈值 = 噪声基线 + 3 */
+const CLAW_LO_DELTA  = 2;    /* 回落阈值 = 噪声基线 + 2（迟滞防抖） */
+const HIT_COOLDOWN   = 320;  /* 两次爪击最小间隔 */
+const REARM_QUIET    = 220;  /* 安静这么久后就重新允许下一次爪击 */
+const REARM_MAX      = 1000; /* 画面一直有动作时强制复位，避免卡死在第一次 */
+const SAMPLE_MS      = 70;
 const CW = 64, CH = 48;
 
 /* ============================================================
@@ -608,6 +612,12 @@ let blowRaf = 0, blowing = false, blowProgress = 0, lastT = 0;
 let micTimer = null, micAttempt = 0;
 const MIC_TIMEOUT = 8000;   /* 手机浏览器可能既不弹授权框也不报错，超时后引导跳过 */
 
+/* 哈气判定（宽松版）：rms≈0.02 的轻声哈气就能过，旧版要 0.06 相当于用力吹 */
+const BLOW_FLOOR = 0.006;   /* 静音基线 */
+const BLOW_RANGE = 0.045;   /* 从基线到「满级哈气」的增量 */
+const BLOW_ON    = 0.18;    /* 超过该级别开始累计进度 */
+const BLOW_GAIN  = 1600;    /* 进度条填满所需毫秒系数（越小越容易） */
+
 function setHint1(t, ok){ hint1.textContent = t; hint1.classList.toggle('ok', !!ok); }
 
 function renderBlow(level){
@@ -746,11 +756,11 @@ function blowLoop(t){
     sum += v*v;
   }
   const rms = Math.sqrt(sum/timeBuf.length);
-  const level = clamp((rms - 0.012)/0.15, 0, 1);
+  const level = clamp((rms - BLOW_FLOOR)/BLOW_RANGE, 0, 1);
   renderBlow(level);
 
-  if (level > 0.32) blowProgress = Math.min(1, blowProgress + dt/3000);
-  else              blowProgress = Math.max(0, blowProgress - dt/6400);
+  if (level > BLOW_ON) blowProgress = Math.min(1, blowProgress + dt * (0.6 + level) / BLOW_GAIN);
+  else                 blowProgress = Math.max(0, blowProgress - dt/4000);
   meterFill.style.width = (blowProgress*100).toFixed(1) + '%';
 
   if (blowProgress >= 1){ blowing = false; stopMic(); onBlowDone(); return; }
@@ -780,15 +790,19 @@ let camStream = null;
 let camTimer = null;
 let camCanvas = null, camCtx = null;
 let prevGray = null;
-let armed = true, lastHitTime = 0, lastMotionTime = 0;
+/* 爪击识别状态：噪声基线 + 平滑能量 + 迟滞/冷却/超时复位 */
+let armed = true, lastHitTime = -1e9;   /* -1e9：进第二步第一次挥手立刻可触发 */
+let clawBase = 0, clawEnv = 0, quietFrom = 0;
+let clawHi = CLAW_TH_BASE, clawLo = CLAW_TH_BASE * 0.55;
 
 function setHint2(t, ok){ hint2.textContent = t; hint2.classList.toggle('ok', !!ok); }
 
 function resetClaw(){
   clawHits = 0;
   armed = true;
-  lastHitTime = 0;
-  lastMotionTime = 0;
+  lastHitTime = -1e9;
+  clawBase = 0; clawEnv = 0; quietFrom = 0;
+  clawHi = CLAW_TH_BASE; clawLo = CLAW_TH_BASE * 0.55;
   Array.prototype.forEach.call(clawDots.children, d => d.classList.remove('on'));
   setHint2('正在启动前置摄像头…');
   motionFill.style.width = '0%';
@@ -821,7 +835,7 @@ async function startClaw(){
 
   scanner2.classList.add('on');
   clawMode = 'camera';
-  setHint2('请将手在镜头前快速挥动');
+  setHint2('请将手在镜头前快速挥动（识别不到可直接点圆框）');
 
   if (!camCanvas){
     camCanvas = document.createElement('canvas');
@@ -831,6 +845,7 @@ async function startClaw(){
   }
   prevGray = null;
   armed = true;
+  clawBase = 0; clawEnv = 0; quietFrom = 0;
   if (camTimer) clearInterval(camTimer);
   camTimer = setInterval(camTick, SAMPLE_MS);
 }
@@ -866,24 +881,62 @@ function camTick(){
   const motion = absSum / n;
   prevGray = gray;
 
-  const level = clamp(motion / 40, 0, 1);
+  const hit = clawStep(motion, performance.now());
+
+  const level = clamp(clawEnv / (clawHi * 1.7), 0, 1);
   motionFill.style.width = (level * 100).toFixed(0) + '%';
   ringCam.style.transform = 'scale(' + (1 + level*0.07) + ')';
   ringCam.style.borderColor = 'rgba(22,119,255,' + (0.32 + level*0.62) + ')';
   ringCam.style.boxShadow = '0 0 ' + (8 + level*32) + 'px rgba(22,119,255,' + (0.18 + level*0.5) + ')';
 
-  const now = performance.now();
-  if (motion > MOTION_TH){
-    lastMotionTime = now;
-    if (armed && now - lastHitTime > HIT_COOLDOWN){
-      armed = false;
-      lastHitTime = now;
-      onClawHit();
-    }
-  } else {
-    if (!armed && now - lastMotionTime > REARM_QUIET) armed = true;
-  }
+  if (hit) onClawHit();
 }
+
+/* 单帧爪击判定：返回 true 表示识别到一次有效爪击
+   阈值随噪声基线自适应；迟滞 + 冷却 + 超时复位，保证第一次之后还能继续计数 */
+function clawStep(motion, now){
+  /* 噪声基线：安静时快速跟随环境，运动时只缓慢上升，避免把挥动学成基线 */
+  /* 首帧从低基线起步：否则一进页面手正好在动，会被学成基线、第一次挥手直接吞掉 */
+  if (!clawBase) clawBase = Math.min(motion, CLAW_TH_BASE);
+  else if (motion < clawBase) clawBase = clawBase * 0.82 + motion * 0.18;
+  else                        clawBase = clawBase * 0.985 + motion * 0.015;
+
+  clawEnv = clawEnv * 0.35 + motion * 0.65;
+
+  clawHi = Math.max(CLAW_TH_BASE, clawBase + CLAW_HI_DELTA);
+  clawLo = Math.max(CLAW_TH_BASE * 0.55, clawBase + CLAW_LO_DELTA);
+
+  if (clawEnv < clawLo){
+    if (!quietFrom) quietFrom = now;
+  } else {
+    quietFrom = 0;
+  }
+
+  const cooled = now - lastHitTime > HIT_COOLDOWN;
+
+  if (armed && cooled && clawEnv > clawHi){
+    armed = false;
+    lastHitTime = now;
+    quietFrom = 0;
+    return true;
+  }
+
+  /* 重新武装：安静够久，或距上次命中太久（画面一直有噪声时也不卡死） */
+  if (!armed && ((quietFrom && now - quietFrom > REARM_QUIET) || now - lastHitTime > REARM_MAX)){
+    armed = true;
+    quietFrom = 0;
+  }
+  return false;
+}
+
+/* 现场诊断：控制台执行 __clawDebug() 查看实时阈值与状态 */
+window.__clawDebug = function(){
+  return {
+    mode: clawMode, hits: clawHits, armed: armed,
+    base: +clawBase.toFixed(1), env: +clawEnv.toFixed(1),
+    hi: +clawHi.toFixed(1), lo: +clawLo.toFixed(1)
+  };
+};
 
 function onClawHit(){
   clawHits++;
@@ -906,6 +959,17 @@ function spawnRipple(){
   scanner2.appendChild(r);
   setTimeout(function(){ if (r.parentNode) r.parentNode.removeChild(r); }, 700);
 }
+
+/* ---- 摄像头模式兜底：识别不到挥动时，直接点圆框也算一次爪击 ---- */
+scanner2.addEventListener('click', function(){
+  if (step !== 2 || clawMode !== 'camera') return;
+  const now = performance.now();
+  if (now - lastHitTime < HIT_COOLDOWN) return;
+  armed = false;
+  lastHitTime = now;
+  quietFrom = 0;
+  onClawHit();
+});
 
 /* ---- 触屏兜底 ---- */
 let isDown = false, rect = null, lastPt = null;
@@ -937,9 +1001,13 @@ function endTouch(e){
   if (!isDown) return;
   isDown = false;
   if (step !== 2 || clawMode !== 'touch') return;
-  if (travel > 45 && maxSpeed > 0.55){
+  const now = performance.now();
+  if (now - lastHitTime < HIT_COOLDOWN) return;
+  /* 宽松版：快速划动算一次；原地轻点也算一次（摄像头不可用时别把人卡住） */
+  if ((travel > 30 && maxSpeed > 0.35) || travel < 10){
+    lastHitTime = now;
     onClawHit();
-  } else if (travel > 14){
+  } else if (travel > 10){
     setHint2('速度不够，请再快一点');
     hint2.classList.remove('ok');
   }
