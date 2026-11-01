@@ -218,6 +218,16 @@ body{
 .btn:disabled{opacity:.35;cursor:default}
 .footer-tip{font-size:11px;color:#b6bcc6;text-align:center;margin-top:10px;line-height:1.5}
 
+/* 「跳过哈气」次级按钮：仅在第一步出现 */
+.btn-skip{
+  display:none;width:100%;height:40px;margin-top:4px;border:none;border-radius:10px;
+  background:transparent;color:var(--blue);font-size:13.5px;font-family:inherit;
+  letter-spacing:.2px;cursor:pointer;transition:opacity .2s,background .2s;
+}
+.btn-skip.is-show{display:block}
+.btn-skip:active{background:rgba(22,119,255,.06)}
+.btn-skip u{text-decoration:none;border-bottom:1px solid rgba(22,119,255,.35);padding-bottom:1px}
+
 .confetti{position:absolute;top:-24px;border-radius:2px;pointer-events:none;z-index:99;animation:fall linear forwards}
 @keyframes fall{to{transform:translateY(900px) rotate(720deg);opacity:0}}
 </style>
@@ -311,6 +321,7 @@ body{
 
   <footer class="footer">
     <button class="btn" id="btnMain">开始哈气验证</button>
+    <button class="btn-skip" id="btnSkip" type="button"><u>麦克风用不了？跳过哈气</u></button>
     <p class="footer-tip">验证过程不会采集或上传任何真实生物信息</p>
   </footer>
 
@@ -544,6 +555,7 @@ function playCash(){
 const app        = $('#app');
 const main       = $('#main');
 const btnMain    = $('#btnMain');
+const btnSkip    = $('#btnSkip');
 const navBack    = $('#navBack');
 
 const ringSolid  = $('#ringSolid');
@@ -585,13 +597,16 @@ function updateFooter(){
   if (step === 1){ btnMain.textContent = '开始哈气验证'; btnMain.disabled = false; }
   else if (step === 2){ btnMain.textContent = '请在前置摄像头前挥动手掌'; btnMain.disabled = true; }
   else { btnMain.textContent = '完成'; btnMain.disabled = false; }
+  btnSkip.classList.toggle('is-show', step === 1);
 }
 
 /* ============================================================
    第一步：哈气
    ============================================================ */
 let micStream = null, analyser = null, timeBuf = null;
-let blowRaf = 0, blowing = false, blowProgress = 0, lastT = 0, simTimer = null;
+let blowRaf = 0, blowing = false, blowProgress = 0, lastT = 0;
+let micTimer = null, micAttempt = 0;
+const MIC_TIMEOUT = 8000;   /* 手机浏览器可能既不弹授权框也不报错，超时后引导跳过 */
 
 function setHint1(t, ok){ hint1.textContent = t; hint1.classList.toggle('ok', !!ok); }
 
@@ -620,26 +635,87 @@ function stopMic(){
   analyser = null;
 }
 
+function clearMicTimer(){
+  if (micTimer){ clearTimeout(micTimer); micTimer = null; }
+}
+
+function micReason(err){
+  const name = (err && err.name) || '';
+  if (name === 'NotAllowedError' || name === 'SecurityError') return '麦克风权限被拒绝';
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') return '没有检测到麦克风';
+  if (name === 'NotReadableError' || name === 'TrackStartError') return '麦克风被其他 App 占用';
+  if (name === 'NotSupportedError') return '浏览器不支持网页录音';
+  return '无法访问麦克风' + (name ? '（' + name + '）' : '');
+}
+
+/* 拿不到麦克风时不再自动模拟，一律引导用户手动跳过 */
+function giveUpMic(reason){
+  stopMic();
+  blowing = false;
+  if (blowRaf){ cancelAnimationFrame(blowRaf); blowRaf = 0; }
+  clearMicTimer();
+  btnMain.disabled = false;
+  btnMain.textContent = '重试麦克风';
+  setHint1(reason + '，请点下方「跳过哈气」继续');
+}
+
+/* 用户主动跳过哈气：作废进行中的权限请求，释放麦克风，直接进入爪击 */
+function skipBlow(){
+  micAttempt++;
+  clearMicTimer();
+  blowing = false;
+  if (blowRaf){ cancelAnimationFrame(blowRaf); blowRaf = 0; }
+  stopMic();
+  blowProgress = 0;
+  meterFill.style.width = '0%';
+  renderBlow(0);
+  if (ringSolid){
+    ringSolid.style.transform = 'scale(1)';
+    ringSolid.style.borderColor = 'rgba(22,119,255,.22)';
+    ringSolid.style.boxShadow = 'none';
+  }
+  setHint1('已跳过哈气，直接进行爪击验证');
+  goStep(2);
+}
+
 async function beginBlow(){
+  if (blowing) return;
+  const attempt = ++micAttempt;
   btnMain.disabled = true;
   setHint1('正在请求麦克风权限…');
   ensureCtx();
 
+  /* 超时保护：手机端授权框迟迟不出现时，提示用户直接跳过 */
+  clearMicTimer();
+  micTimer = setTimeout(function(){
+    if (attempt !== micAttempt || step !== 1 || analyser) return;
+    setHint1('麦克风没有响应，请点下方「跳过哈气」继续');
+    btnMain.disabled = false;
+    btnMain.textContent = '重试麦克风';
+  }, MIC_TIMEOUT);
+
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-    setHint1('当前环境不支持麦克风，已切换为演示模式');
-    simulateBlow(); return;
+    giveUpMic('当前浏览器不支持网页录音');
+    return;
   }
   try{
     micStream = await navigator.mediaDevices.getUserMedia({
       audio:{ echoCancellation:true, noiseSuppression:false, autoGainControl:false }
     });
   }catch(err){
-    setHint1('无法访问麦克风，已切换为演示模式');
-    simulateBlow(); return;
+    if (attempt !== micAttempt) return;   /* 已跳过或已重置，忽略迟到的失败 */
+    giveUpMic(micReason(err));
+    return;
   }
 
+  /* 等待授权期间用户已经跳过 / 重置：立刻归还麦克风 */
+  if (attempt !== micAttempt){ stopMic(); return; }
+
+  clearMicTimer();
+  btnMain.disabled = true;
+
   const ctx = ensureCtx();
-  if (!ctx){ simulateBlow(); return; }
+  if (!ctx){ giveUpMic('音频引擎不可用'); return; }
   try{
     const src = ctx.createMediaStreamSource(micStream);
     analyser = ctx.createAnalyser();
@@ -648,9 +724,8 @@ async function beginBlow(){
     src.connect(analyser);
     timeBuf = new Uint8Array(analyser.fftSize);
   }catch(e){
-    stopMic();
-    setHint1('麦克风初始化失败，已切换为演示模式');
-    simulateBlow(); return;
+    giveUpMic('麦克风初始化失败');
+    return;
   }
 
   setHint1('请对着麦克风持续哈气…');
@@ -682,22 +757,8 @@ function blowLoop(t){
   blowRaf = requestAnimationFrame(blowLoop);
 }
 
-function simulateBlow(){
-  if (simTimer) clearInterval(simTimer);
-  let p = 0;
-  simTimer = setInterval(function(){
-    p += 2.5 + Math.random()*3.5;
-    blowProgress = Math.min(1, p/100);
-    meterFill.style.width = (blowProgress*100).toFixed(1) + '%';
-    renderBlow(0.45 + Math.random()*0.55);
-    if (blowProgress >= 1){
-      clearInterval(simTimer); simTimer = null;
-      onBlowDone();
-    }
-  }, 80);
-}
-
 function onBlowDone(){
+  clearMicTimer();
   meterFill.style.width = '100%';
   setHint1('哈气验证通过', true);
   renderBlow(0);
@@ -952,10 +1013,16 @@ navBack.addEventListener('click', function(){
   if (step === 3) resetAll();
 });
 
+btnSkip.addEventListener('click', function(){
+  if (step !== 1) return;
+  skipBlow();
+});
+
 function resetAll(){
   stopVoice();
   if ('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
-  if (simTimer){ clearInterval(simTimer); simTimer = null; }
+  micAttempt++;
+  clearMicTimer();
   if (blowRaf){ cancelAnimationFrame(blowRaf); blowRaf = 0; }
   blowing = false;
   stopMic();
