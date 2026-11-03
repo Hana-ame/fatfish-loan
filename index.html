@@ -158,6 +158,9 @@ body{
   margin-top:16px;min-height:20px;line-height:1.5;transition:color .25s;
 }
 .hint.ok{color:var(--blue);font-weight:600}
+.hint.is-skip{color:var(--blue);text-decoration:underline;text-underline-offset:3px;
+  text-decoration-color:rgba(22,119,255,.45);cursor:pointer}
+.hint.is-skip:active{opacity:.55}
 
 .success-head{text-align:center;padding-top:14px}
 .check-circle{
@@ -732,7 +735,20 @@ const BLOW_FLOOR_MIN = 0.0035; /* 绝对触发下限：比正常呼吸略响一�
 const BLOW_RANGE     = 0.020;  /* 从触发阈值到「满级哈气」的增量 */
 const BLOW_GAIN      = 1100;   /* 进度条填满所需毫秒系数（越小越容易） */
 
-function setHint1(t, ok){ hint1.textContent = t; hint1.classList.toggle('ok', !!ok); }
+let hintSkipArmed = false;   /* 提示行当前是否可点：点了就跳过哈气 */
+function setHint1(t, ok){
+  hintSkipArmed = false;
+  hint1.classList.remove('is-skip');
+  hint1.textContent = t;
+  hint1.classList.toggle('ok', !!ok);
+}
+/* 麦克风不可用时的提示：这一整行本身就是「跳过哈气」的按钮 */
+function setSkipHint(t){
+  hintSkipArmed = true;
+  hint1.classList.remove('ok');
+  hint1.classList.add('is-skip');
+  hint1.textContent = t;
+}
 
 function renderBlow(level){
   if (ringSolid){
@@ -780,7 +796,27 @@ function giveUpMic(reason){
   clearMicTimer();
   btnMain.disabled = false;
   btnMain.textContent = '重试麦克风';
-  setHint1(reason + '，请检查麦克风权限后重试');
+  setSkipHint(reason + '，点这行字跳过哈气');
+}
+
+/* 用户点提示行跳过哈气：作废进行中的权限请求，释放麦克风，直接进入爪击 */
+function skipBlow(){
+  micAttempt++;
+  clearMicTimer();
+  blowPending = false;
+  blowing = false;
+  if (blowRaf){ cancelAnimationFrame(blowRaf); blowRaf = 0; }
+  stopMic();
+  blowProgress = 0;
+  meterFill.style.width = '0%';
+  renderBlow(0);
+  if (ringSolid){
+    ringSolid.style.transform = 'scale(1)';
+    ringSolid.style.borderColor = 'rgba(22,119,255,.22)';
+    ringSolid.style.boxShadow = 'none';
+  }
+  setHint1('已跳过哈气，直接进行爪击验证');
+  goStep(2);
 }
 
 /* 先播完「请完成哈气动作」再开麦克风：
@@ -813,7 +849,7 @@ async function beginBlow(){
   clearMicTimer();
   micTimer = setTimeout(function(){
     if (attempt !== micAttempt || step !== 1 || analyser) return;
-    setHint1('麦克风没有响应，请检查权限后点「重试麦克风」');
+    setSkipHint('麦克风没有响应，点这行字跳过哈气');
     btnMain.disabled = false;
     btnMain.textContent = '重试麦克风';
   }, MIC_TIMEOUT);
@@ -1238,6 +1274,14 @@ document.addEventListener('pointerdown', function(){
 
 navBack.addEventListener('click', function(){
   if (step === 3) resetAll();
+});
+
+/* 麦克风不可用时，点提示行本身 = 跳过哈气 */
+hint1.addEventListener('click', function(){
+  if (step !== 1 || !hintSkipArmed) return;
+  hintSkipArmed = false;
+  primeVoices();
+  skipBlow();
 });
 
 /* 任意首次触摸/点击都当作解锁语音的手势（iOS/Android 自动播放限制） */
