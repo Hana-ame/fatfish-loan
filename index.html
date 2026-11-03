@@ -57,6 +57,8 @@ body{
 .step.is-done{color:var(--blue)}
 .step.is-done i{background:rgba(22,119,255,.12);color:var(--blue)}
 .step-line{width:34px;height:1.5px;background:#eef0f3;margin:0 2px 18px;border-radius:2px}
+/* 欢迎页不显示步骤条 */
+.stepper.is-hidden{display:none}
 
 .main{
   flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
@@ -162,6 +164,33 @@ body{
   text-decoration-color:rgba(22,119,255,.45);cursor:pointer}
 .hint.is-skip:active{opacity:.55}
 
+/* 欢迎页 */
+.welcome{text-align:center;padding:8px 0 4px}
+.welcome-logo{
+  width:84px;height:84px;border-radius:26px;margin:0 auto;
+  display:grid;place-items:center;font-size:40px;line-height:1;
+  background:linear-gradient(135deg,#eaf3ff,#d6e6ff);
+  box-shadow:0 10px 30px rgba(22,119,255,.2);
+  animation:pop .45s cubic-bezier(.2,1.4,.4,1);
+}
+.welcome h2{font-size:22px;font-weight:700;letter-spacing:.5px;margin-top:18px}
+.welcome-sub{font-size:13px;color:var(--gray);line-height:1.7;margin-top:8px}
+.welcome-card{
+  margin:22px 0 0;padding:2px 16px;text-align:left;
+  background:#fafbfc;border:1px solid #eef0f3;border-radius:14px;
+}
+.welcome-card .row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:13px 0;font-size:13px;color:var(--gray);border-bottom:1px solid #f2f3f5;
+}
+.welcome-card .row:last-child{border-bottom:none}
+.welcome-card .row b{color:#1d2129;font-weight:600}
+.welcome-card .row b.hl{color:var(--blue);font-size:16px;letter-spacing:.3px}
+.welcome-note{
+  font-size:11.5px;color:#b6bcc6;line-height:1.7;margin-top:16px;
+  text-align:left;padding:0 4px;
+}
+
 .success-head{text-align:center;padding-top:14px}
 .check-circle{
   width:68px;height:68px;border-radius:50%;margin:0 auto 18px;
@@ -238,8 +267,8 @@ body{
     <div class="nav-pad"></div>
   </header>
 
-  <div class="stepper">
-    <div class="step is-active" data-step="1"><i>1</i><span>哈气</span></div>
+  <div class="stepper is-hidden">
+    <div class="step" data-step="1"><i>1</i><span>哈气</span></div>
     <div class="step-line"></div>
     <div class="step" data-step="2"><i>2</i><span>爪击</span></div>
     <div class="step-line"></div>
@@ -248,8 +277,26 @@ body{
 
   <main class="main" id="main">
 
+    <!-- ============ 欢迎页 ============ -->
+    <section class="page is-active" data-page="0">
+      <div class="welcome">
+        <div class="welcome-logo">🐟</div>
+        <h2>欢迎使用肥鱼贷</h2>
+        <p class="welcome-sub">喵星人专属极速放款 · 哈一口气就能借</p>
+
+        <div class="welcome-card">
+          <div class="row"><span>授信额度</span><b class="hl">¥200,000.00</b></div>
+          <div class="row"><span>参考利率</span><b>3 根猫条 / 天</b></div>
+          <div class="row"><span>到账时间</span><b>验证通过立即到账</b></div>
+          <div class="row"><span>还款方式</span><b>每天踩奶一次</b></div>
+        </div>
+
+        <p class="welcome-note">⚠️ 本页面纯属恶搞演示：不会真的放贷，也不会采集、录制、上传任何真实生物信息。</p>
+      </div>
+    </section>
+
     <!-- ============ 第一步 ============ -->
-    <section class="page is-active" data-page="1">
+    <section class="page" data-page="1">
       <div class="page-head">
         <h2>请完成哈气动作</h2>
         <p>请将手机靠近面部，对着麦克风<b>持续哈气</b>，以采集气流特征</p>
@@ -265,7 +312,7 @@ body{
       </div>
 
       <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
-      <div class="hint" id="hint1">点击下方按钮开始验证</div>
+      <div class="hint" id="hint1">正在播放语音提示…</div>
     </section>
 
     <!-- ============ 第二步 ============ -->
@@ -316,7 +363,7 @@ body{
   </main>
 
   <footer class="footer">
-    <button class="btn" id="btnMain">开始哈气验证</button>
+    <button class="btn" id="btnMain">立即申请 · 开始验证</button>
     <p class="footer-tip">验证过程不会采集或上传任何真实生物信息</p>
     <p class="voice-tip" id="voiceTip" hidden></p>
   </footer>
@@ -677,6 +724,7 @@ const main       = $('#main');
 const btnMain    = $('#btnMain');
 const voiceTip   = $('#voiceTip');
 const navBack    = $('#navBack');
+const stepperEl  = $('.stepper');
 
 const ringSolid  = $('#ringSolid');
 const faceIcon   = $('#faceIcon');
@@ -693,7 +741,7 @@ const clawDots     = $('#clawDots');
 const hint2        = $('#hint2');
 const contractNo   = $('#contractNo');
 
-let step = 1;
+let step = 0;   /* 0 = 欢迎页，尚未进入哈气验证 */
 
 /* ============================================================
    步骤切换
@@ -706,15 +754,21 @@ function goStep(n){
     el.classList.toggle('is-active', i === n);
     el.classList.toggle('is-done',   i <  n);
   });
+  /* 欢迎页不显示步骤条 / 返回按钮 */
+  if (stepperEl) stepperEl.classList.toggle('is-hidden', n === 0);
+  if (navBack) navBack.style.visibility = (n === 0) ? 'hidden' : '';
   main.scrollTop = 0;
   updateFooter();
 
+  /* 进入哈气屏时才播第 1 句语音；播完再开麦（顺序由 queueBlow 保证） */
+  if (n === 1){ setHint1('正在播放语音提示…'); playVoice(1); queueBlow(); }
   if (n === 2){ playVoice(2); startClaw(); }
   if (n === 3) playVoice(3);
 }
 
 function updateFooter(){
-  if (step === 1){ btnMain.textContent = '开始哈气验证'; btnMain.disabled = false; }
+  if (step === 0){ btnMain.textContent = '立即申请 · 开始验证'; btnMain.disabled = false; }
+  else if (step === 1){ btnMain.textContent = '重试哈气验证'; btnMain.disabled = false; }
   else if (step === 2){ btnMain.textContent = '请在前置摄像头前挥动手掌'; btnMain.disabled = true; }
   else { btnMain.textContent = '完成'; btnMain.disabled = false; }
 }
@@ -1256,7 +1310,9 @@ function confetti(){
 btnMain.addEventListener('click', function(){
   primeVoices();
   ensureCtx();
-  if (step === 1){
+  if (step === 0){
+    goStep(1);            /* 进入哈气屏：播语音提示 + 等语音播完再开麦 */
+  } else if (step === 1){
     playVoice(1);
     queueBlow();
   } else if (step === 3){
@@ -1308,9 +1364,9 @@ function resetAll(){
     ringSolid.style.borderColor = 'rgba(22,119,255,.22)';
     ringSolid.style.boxShadow = 'none';
   }
-  setHint1('点击下方按钮开始验证');
+  setHint1('正在播放语音提示…');
   resetClaw();
-  goStep(1);
+  goStep(0);
 }
 
 document.addEventListener('visibilitychange', function(){
@@ -1335,7 +1391,7 @@ document.addEventListener('visibilitychange', function(){
   }
 });
 
-updateFooter();
+goStep(0);
 })();
 </script>
 </body>
