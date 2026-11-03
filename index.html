@@ -220,10 +220,6 @@ body{
 .voice-tip{font-size:11.5px;line-height:1.6;color:#d46b08;background:#fff7e8;border:1px solid #ffe4b8;
   border-radius:8px;padding:6px 10px;margin-top:8px;text-align:center}
 .voice-tip[hidden]{display:none}
-.voice-replay{display:block;margin:10px auto 0;border:none;background:transparent;
-  color:var(--blue);font-family:inherit;font-size:12.5px;cursor:pointer;
-  text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(22,119,255,.4)}
-.voice-replay:active{opacity:.5}
 
 /* 「跳过哈气」次级按钮：仅在第一步出现 */
 .btn-skip{
@@ -277,7 +273,6 @@ body{
 
       <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
       <div class="hint" id="hint1">点击下方按钮开始验证</div>
-      <button class="voice-replay" id="btnVoice" type="button">🔊 没听到语音提示？点这里播放</button>
     </section>
 
     <!-- ============ 第二步 ============ -->
@@ -689,7 +684,6 @@ const app        = $('#app');
 const main       = $('#main');
 const btnMain    = $('#btnMain');
 const btnSkip    = $('#btnSkip');
-const btnVoice   = $('#btnVoice');
 const voiceTip   = $('#voiceTip');
 const navBack    = $('#navBack');
 
@@ -1265,12 +1259,6 @@ btnMain.addEventListener('click', function(){
   } else if (step === 3){
     resetAll();
   }
-});
-
-/* 手动重播第 1 句（也是给自动播放被拦截时的手势补救） */
-btnVoice.addEventListener('click', function(){
-  pendingVoiceRetry = 0;
-  playVoice(1);
 });
 
 /* 任意触摸：如果之前语音被拦截，借这次手势重试 */
